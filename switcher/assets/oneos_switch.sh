@@ -2120,7 +2120,7 @@ $G /system/bin/am start -n com.nothing.ntessentialspace/.MainActivity >/dev/null
 ESSOPEN
     chmod 700 "$STAGE/data/oneos_essential_open.sh"
 fi
-$BB sh -c "
+UI_ACTIVATOR_SCRIPT="
 BB=\"$BB\"
 [ -n \"\$BB\" ] || BB=\$(which busybox 2>/dev/null || echo /data/adb/ksu/bin/busybox)
 GEN=\$(cat $STAGE/tmp/softreboot.gen 2>/dev/null); PASS=1; BRPID=''
@@ -3562,7 +3562,15 @@ done
 GEN=\$(cat $STAGE/tmp/softreboot.gen 2>/dev/null); PASS=\$((PASS + 1))
 echo \"[UI Activator] soft reboot of the guest (generation \$GEN): pass \$PASS, waiting for its new boot\"
 done
-" </dev/null >/data/local/tmp/ui_activator.log 2>&1 &
+"
+UI_ACTIVATOR_FILE="$STAGE/ui_activator_runtime.sh"
+if printf '%s' "$UI_ACTIVATOR_SCRIPT" > "$UI_ACTIVATOR_FILE" && chmod 600 "$UI_ACTIVATOR_FILE"; then
+    unset UI_ACTIVATOR_SCRIPT
+    $BB sh "$UI_ACTIVATOR_FILE" </dev/null >/data/local/tmp/ui_activator.log 2>&1 &
+else
+    echo "[UI Activator] failed to write runtime script: $UI_ACTIVATOR_FILE" > /data/local/tmp/ui_activator.log
+    unset UI_ACTIVATOR_SCRIPT
+fi
 
 # Samsung CPU/GPU votes survive the host framework; capability-detected on every profile.
 # 0.4.38: only with the heat cap off (Cool down when hot, Advanced). With it on, the heat cap
