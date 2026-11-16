@@ -21,7 +21,7 @@ jobs:
           java-version: '21'
           cache: gradle
           cache-dependency-path: app-android/**/*.gradle*
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Build and stage Guest helper APK
         run: ./scripts/build-guest-manager.sh debug
       - name: Build full debug APK
