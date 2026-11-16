@@ -14,9 +14,11 @@
 
 ## Build
 
-Requires JDK 21 and Android SDK (android-37). From `app-android/`:
+Requires JDK 21 and Android SDK API 37. From the repository root, build and stage the Guest helper first, then assemble the main APK:
 
 ```bash
+./scripts/build-guest-manager.sh debug
+cd app-android
 ./gradlew :app:assembleFullDebug --stacktrace
 ```
 
@@ -24,10 +26,10 @@ APK output: `app-android/app/build/outputs/apk/full/debug/`
 
 ## GitHub Actions
 
-Push to `main` or run **Actions → Build OneOS APK → Run workflow**. Download `oneos-full-debug` from the completed run's Artifacts (14-day retention).
+Push to `main` or run **Actions → Build OneOS APK → Run workflow**. Download `oneos-full-debug` from the completed run's Artifacts (14-day retention). The workflow needs repository Actions secrets `GH_PACKAGES_USER` and `GH_PACKAGES_TOKEN` to resolve Samsung SESL packages from GitHub Packages; the token must have `read:packages` access. Keep credentials in Actions secrets, never in source.
 
 CI verifies compilation only; real-device testing is still required for transfers, cancellation, low storage, Guest visibility, and root behavior.
 
-## Safety
+## License and safety
 
-Experimental software. Back up important data and test on a non-critical device. No license is selected yet; reuse permissions are not granted by default.
+See `LICENSE`, `NOTICE`, and `CREDITS.md` for license and attribution terms. In particular, OneLineage-derived components are included with separate written permission for this OneOS distribution; that permission does not grant general reuse rights elsewhere. This software is experimental: back up important data and test on a non-critical device.

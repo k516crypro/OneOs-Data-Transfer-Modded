@@ -1,0 +1,455 @@
+// OneOS reports (0.4.29): the service behind "Send to the OneOS team".
+//
+// A Cloudflare Worker with one Workers KV namespace (REPORTS). The app sends a
+// report's zip in parts (POST /v1/part, at most 20 MiB each: one KV value holds
+// 25 MiB) and then its record (POST /v1/report, schema oneos.report/1,
+// app-android/core/model/.../Reports.kt). The team's server collects them with
+// the admin key (GET /v1/list, /v1/get, POST /v1/delete; reports/pull.py) and
+// deletes each once it has a verified copy; anything left expires after 30 days.
+//
+// Secrets (wrangler secret put): UPLOAD_KEY (in the app: it can only add
+// reports), ADMIN_KEY (the server only), TG_TOKEN and TG_CHAT / TG_THREAD (the
+// ping to the group's Phone reports topic). Nothing is served publicly, and the
+// sender's address is used for the rate limit only, never stored.
+//
+// The ping carries only checked fields (ids, versions, the fixed checklist
+// answers) and, from 0.4.31, who sent it: the owner asked, since a report that
+// names no one cannot be followed up. The contact is free text the tester typed,
+// so only a Telegram username is shown, as a mention; an e-mail or a phone
+// number is named as such and stays in the record (t.me/TheoneOS is a public
+// group). The note still goes to the team only.
+//
+// 0.5.16 (owner 2026-11-15: "reports need to be refused ! we cant be solving
+// issues of people that didnt even bother joining the group"): a report is
+// taken only from a member of the OneOS Telegram group. The app signs in once
+// through our bot: POST /v1/signin gives a one-time code and the bot's
+// t.me/<bot>?start=<code> link; the bot's webhook (POST /v1/tg, Telegram's
+// secret-token header) ties the code to the Telegram account that pressed
+// Start; POST /v1/claim hands the app a pass signed with PASS_KEY (the account's
+// id and username, good for 180 days). Every upload carries the pass
+// (X-OneOS-Pass) and is checked against the group (getChatMember: a member, an
+// admin or a restricted member; left or banned is refused with the group's
+// link). Only a yes is cached, for an hour, so joining works at once. An app
+// without a pass (0.5.15 and older) is taken until REQUIRE_MEMBER is "1".
+// Installing and running OneOS stay open to everyone; only reports are gated.
+// New secrets: PASS_KEY, TG_HOOK (the webhook's secret token), TG_BOT and
+// TG_SIGNIN_TOKEN: the sign-in bot (@OneOSReportsBot, an admin of the group) is
+// its own bot; the group pings stay on TG_TOKEN.
+
+const PART_MAX = 20 * 1024 * 1024
+const RECORD_MAX = 32 * 1024
+const PARTS_MAX = 4
+const TTL = 30 * 24 * 3600
+const ID = /^[a-z0-9]{1,32}-[0-9a-f]{4,8}$/
+const TOKEN = /^[a-z0-9][a-z0-9._-]{0,47}$/
+const MODEL = /^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,39}$/
+const SHA = /^[0-9a-f]{64}$/
+const KIND = /^[A-Z_]{1,24}$/
+const LABEL = /^[A-Za-z0-9][A-Za-z0-9 .+()_-]{0,47}$/
+const STARTS = ['home', 'logo', 'black', 'back']
+const ITEMS = ['screen', 'wifi', 'data', 'calls', 'sms', 'bluetooth', 'sound', 'camera', 'google', 'location', 'back', 'heat', 'fold']
+const ANSWERS = ['works', 'problem', 'not_tried']
+const LABELS = {
+  screen: 'Screen', wifi: 'Wi-Fi', data: 'Mobile data', calls: 'Calls', sms: 'SMS', bluetooth: 'Bluetooth', sound: 'Sound',
+  camera: 'Camera', google: 'Google', location: 'Location', back: 'Back to One UI', heat: 'Heat', fold: 'Both screens',
+}
+const GROUP_LINK = 'https://t.me/TheoneOS'
+const PASS_SECONDS = 180 * 24 * 3600
+const SIGNIN_TTL = 600
+const MEMBER_TTL = 3600
+const CODE = /^[A-Za-z0-9_-]{22}$/
+const START_LABELS = { home: 'reached the home screen', logo: 'stuck on the boot logo', black: 'black screen', back: 'came back by itself' }
+
+export default {
+  async fetch(req, env, ctx) {
+    const url = new URL(req.url)
+    try {
+      if (req.method === 'POST' && url.pathname === '/v1/part') return await part(req, env, url)
+      if (req.method === 'POST' && url.pathname === '/v1/report') return await report(req, env, ctx)
+      if (req.method === 'POST' && url.pathname === '/v1/hello') return await hello(req, env)
+      if (req.method === 'POST' && url.pathname === '/v1/signin') return await signin(req, env)
+      if (req.method === 'POST' && url.pathname === '/v1/claim') return await claim(req, env, url)
+      if (req.method === 'POST' && url.pathname === '/v1/tg') return await hook(req, env, ctx)
+      if (req.method === 'GET' && url.pathname === '/v1/list') return await list(req, env, url)
+      if (req.method === 'GET' && url.pathname === '/v1/get') return await get(req, env, url)
+      if (req.method === 'POST' && url.pathname === '/v1/delete') return await del(req, env, url)
+      if (req.method === 'GET' && url.pathname === '/') return reply(200, { service: 'oneos-reports' })
+      return reply(404, { error: 'not found' })
+    } catch (e) {
+      return reply(e instanceof Refused ? e.status : 500, e instanceof Refused ? { error: e.message, ...e.extra } : { error: 'internal error' })
+    }
+  },
+}
+
+class Refused extends Error {
+  constructor(status, message, extra = {}) {
+    super(message)
+    this.status = status
+    this.extra = extra
+  }
+}
+
+function reply(status, body) {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+}
+
+// Constant time, so the keys cannot be guessed a character at a time.
+function same(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || !b) return false
+  const x = new TextEncoder().encode(a)
+  const y = new TextEncoder().encode(b)
+  let d = x.length ^ y.length
+  for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x[i] ?? 0) ^ (y[i] ?? 0)
+  return d === 0
+}
+
+function appKey(req, env) {
+  if (!same(req.headers.get('x-oneos-key') ?? '', env.UPLOAD_KEY)) throw new Refused(401, 'bad key')
+}
+
+async function limited(req, env) {
+  if (env.LIMITER) {
+    const { success } = await env.LIMITER.limit({ key: req.headers.get('cf-connecting-ip') ?? 'unknown' })
+    if (!success) throw new Refused(429, 'too many reports, try again in a minute')
+  }
+}
+
+// The sender of an upload: the group member its pass names, or null for an app
+// without a pass while those are still taken (REQUIRE_MEMBER unset).
+async function uploader(req, env) {
+  appKey(req, env)
+  await limited(req, env)
+  const pass = req.headers.get('x-oneos-pass')
+  if (!pass) {
+    if (env.REQUIRE_MEMBER === '1') {
+      throw new Refused(403, 'reports are for members of the OneOS group: update OneOS and sign in with Telegram', { signin: true, group: GROUP_LINK })
+    }
+    return null
+  }
+  const user = await readPass(env, pass)
+  if (!user) throw new Refused(403, 'sign in with Telegram again', { signin: true, group: GROUP_LINK })
+  if (!(await isMember(env, user.id))) throw new Refused(403, 'reports are for members of the OneOS group: join it, then send again', { join: true, group: GROUP_LINK })
+  return user
+}
+
+// --- Sign-in through the bot, the pass, the group check (0.5.16) ---
+
+const enc = (s) => new TextEncoder().encode(s)
+
+function b64url(bytes) {
+  let s = ''
+  for (const b of bytes) s += String.fromCharCode(b)
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function unb64url(s) {
+  const t = atob(s.replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(t, (c) => c.charCodeAt(0))
+}
+
+async function hmac(env, data) {
+  const key = await crypto.subtle.importKey('raw', enc(env.PASS_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, enc(data))))
+}
+
+async function makePass(env, user) {
+  const body = b64url(enc(JSON.stringify({ id: user.id, u: user.username, exp: Math.floor(Date.now() / 1000) + PASS_SECONDS })))
+  return `${body}.${await hmac(env, body)}`
+}
+
+async function readPass(env, pass) {
+  if (!env.PASS_KEY || pass.length > 600 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(pass)) return null
+  const [body, sig] = pass.split('.')
+  if (!same(sig, await hmac(env, body))) return null
+  let p
+  try { p = JSON.parse(new TextDecoder().decode(unb64url(body))) } catch { return null }
+  if (!Number.isSafeInteger(p?.id) || p.id <= 0 || !(p.exp > Date.now() / 1000)) return null
+  return { id: p.id, username: typeof p.u === 'string' && TG_USER.test(p.u) ? p.u : null }
+}
+
+// The sign-in bot answers /start and checks the group; TG_TOKEN when there is none.
+async function tg(env, method, body) {
+  const res = await fetch(`https://api.telegram.org/bot${env.TG_SIGNIN_TOKEN || env.TG_TOKEN}/${method}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
+async function isMember(env, id) {
+  if ((await env.REPORTS.get(`member:${id}`)) === '1') return true
+  let r
+  try { r = await tg(env, 'getChatMember', { chat_id: env.TG_CHAT, user_id: id }) } catch { r = null }
+  // 400: Telegram does not know this account in the group (never joined).
+  if (r?.ok !== true && r?.error_code !== 400) throw new Refused(503, 'the group could not be checked, try again in a minute')
+  const m = r.ok ? r.result : {}
+  const yes = ['creator', 'administrator', 'member'].includes(m.status) || (m.status === 'restricted' && m.is_member === true)
+  if (yes) await env.REPORTS.put(`member:${id}`, '1', { expirationTtl: MEMBER_TTL })
+  return yes
+}
+
+function signinReady(env) {
+  if (!env.PASS_KEY || !env.TG_BOT || !env.TG_TOKEN || !env.TG_CHAT) throw new Refused(503, 'sign-in is not set up')
+}
+
+async function signin(req, env) {
+  appKey(req, env)
+  await limited(req, env)
+  signinReady(env)
+  const code = b64url(crypto.getRandomValues(new Uint8Array(16)))
+  await env.REPORTS.put(`signin:${code}`, '{}', { expirationTtl: SIGNIN_TTL })
+  return reply(200, { code, url: `https://t.me/${env.TG_BOT}?start=${code}`, group: GROUP_LINK, expiresIn: SIGNIN_TTL })
+}
+
+// Asked every few seconds while the app waits (no rate limit: one KV read).
+async function claim(req, env, url) {
+  appKey(req, env)
+  signinReady(env)
+  const code = url.searchParams.get('code') ?? ''
+  if (!CODE.test(code)) throw new Refused(400, 'bad code')
+  const v = await env.REPORTS.get(`signin:${code}`)
+  if (v == null) throw new Refused(404, 'the sign-in ran out, start it again')
+  const who = JSON.parse(v)
+  if (!who.id) return reply(202, { waiting: true })
+  await env.REPORTS.delete(`signin:${code}`)
+  const member = await isMember(env, who.id)
+  return reply(200, { pass: await makePass(env, who), username: who.username, member, group: GROUP_LINK })
+}
+
+// The bot's webhook: only "/start <code>" in a private chat does anything.
+async function hook(req, env, ctx) {
+  if (!same(req.headers.get('x-telegram-bot-api-secret-token') ?? '', env.TG_HOOK)) throw new Refused(401, 'bad key')
+  let u
+  try { u = await req.json() } catch { return reply(200, { ok: true }) }
+  const m = u?.message
+  const from = m?.from
+  if (m?.chat?.type !== 'private' || !from || from.is_bot || !Number.isSafeInteger(from.id) || typeof m.text !== 'string') return reply(200, { ok: true })
+  // Old messages (the bot had no webhook before 0.5.16; Telegram hands over what waited) get no answer.
+  if (!(Date.now() / 1000 - m.date < SIGNIN_TTL)) return reply(200, { ok: true })
+  const start = /^\/start(?:\s+(\S+))?$/.exec(m.text.trim())
+  if (!start) return reply(200, { ok: true })
+  const code = start[1] ?? ''
+  const v = CODE.test(code) ? await env.REPORTS.get(`signin:${code}`) : null
+  const user = { id: from.id, username: typeof from.username === 'string' && TG_USER.test(from.username) ? from.username : null }
+  let answer
+  if (v == null) {
+    answer = 'This bot signs you in to OneOS reports. In OneOS: Send to the OneOS team → Sign in with Telegram.'
+  } else if (JSON.parse(v).id) {
+    answer = 'This sign-in was already used. Start it again in OneOS.'
+  } else {
+    await env.REPORTS.put(`signin:${code}`, JSON.stringify(user), { expirationTtl: SIGNIN_TTL })
+    answer = null
+  }
+  ctx.waitUntil((async () => {
+    if (answer == null) {
+      const member = await isMember(env, user.id).catch(() => null)
+      answer = member === false
+        ? `Signed in to OneOS. Reports are for members of the OneOS group: join ${GROUP_LINK}, then go back to OneOS and send your report.`
+        : 'Signed in to OneOS ✅ Go back to the app to send your report.'
+    }
+    await tg(env, 'sendMessage', { chat_id: from.id, text: answer, disable_web_page_preview: true })
+  })().catch(() => {}))
+  return reply(200, { ok: true })
+}
+
+function admin(req, env) {
+  const auth = req.headers.get('authorization') ?? ''
+  if (!same(auth.replace(/^Bearer /, ''), env.ADMIN_KEY)) throw new Refused(401, 'bad key')
+}
+
+function int(v, lo, hi) {
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < lo || n > hi) throw new Refused(400, 'bad number')
+  return n
+}
+
+async function part(req, env, url) {
+  await uploader(req, env)
+  const id = url.searchParams.get('id') ?? ''
+  if (!ID.test(id)) throw new Refused(400, 'bad id')
+  const n = int(url.searchParams.get('n'), 1, PARTS_MAX)
+  const i = int(url.searchParams.get('i'), 0, n - 1)
+  const length = int(req.headers.get('content-length'), 1, PART_MAX)
+  // Streamed into KV as it arrives: the Worker never holds the part.
+  await env.REPORTS.put(`part:${id}:${i}`, req.body, { expirationTtl: TTL, metadata: { n, bytes: length } })
+  return reply(200, { ok: true, id, part: i })
+}
+
+// The record as sent, checked field by field; anything else in it is dropped.
+function check(r) {
+  const fail = (what) => { throw new Refused(400, `bad ${what}`) }
+  if (r?.schema !== 'oneos.report/1') fail('schema')
+  if (!ID.test(r.reportId ?? '')) fail('reportId')
+  const app = r.app ?? {}
+  if (!TOKEN.test(app.id ?? '') || !TOKEN.test(app.version ?? '') || !Number.isInteger(app.versionCode)) fail('app')
+  if (app.series && !TOKEN.test(app.series)) fail('series')
+  const phone = r.phone ?? {}
+  if (!MODEL.test(phone.model ?? '') || !TOKEN.test(phone.device ?? '')) fail('phone')
+  if (phone.profile != null && !TOKEN.test(phone.profile)) fail('profile')
+  if (phone.label != null && !LABEL.test(phone.label)) fail('phone label')
+  if (r.image != null && !TOKEN.test(r.image)) fail('image')
+  if (r.imageName != null && !LABEL.test(r.imageName)) fail('image name')
+  if (r.sessionId != null && !/^[0-9a-f]{8,32}$/.test(r.sessionId)) fail('sessionId')
+  // 0.4.32: the app that ran the session, which can be older than the one sending
+  // it. Checked like app.version, so the record says which build a result is for.
+  if (r.sessionApp != null) {
+    const sa = r.sessionApp
+    if (!TOKEN.test(sa.version ?? '')) fail('sessionApp')
+    if (sa.versionCode != null && !Number.isInteger(sa.versionCode)) fail('sessionApp')
+    if (sa.date != null && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(sa.date)) fail('sessionApp')
+  }
+  if (r.outcome != null && (!KIND.test(r.outcome.kind ?? '') || (r.outcome.afterSeconds != null && !Number.isInteger(r.outcome.afterSeconds)))) fail('outcome')
+  if (r.checklist != null) {
+    const c = r.checklist
+    if (c.start != null && !STARTS.includes(c.start)) fail('start')
+    for (const [k, v] of Object.entries(c.items ?? {})) if (!ITEMS.includes(k) || !ANSWERS.includes(v)) fail('checklist')
+  }
+  if (r.note != null && (typeof r.note !== 'string' || r.note.length > 500)) fail('note')
+  if (r.contact != null && (typeof r.contact !== 'string' || r.contact.length > 64)) fail('contact')
+  if (r.logs != null) {
+    const l = r.logs
+    if (!['session', 'probe'].includes(l.kind) || !/^[A-Za-z0-9._-]{1,80}$/.test(l.name ?? '') || typeof l.full !== 'boolean') fail('logs')
+    if (!Number.isInteger(l.bytes) || l.bytes < 1 || l.bytes > PARTS_MAX * PART_MAX || !SHA.test(l.sha256 ?? '')) fail('logs')
+    if (l.parts !== Math.ceil(l.bytes / PART_MAX)) fail('parts')
+  }
+  return {
+    schema: r.schema, reportId: r.reportId, createdAt: String(r.createdAt ?? '').slice(0, 40),
+    app: { id: app.id, version: app.version, versionCode: app.versionCode, series: app.series ?? '' },
+    phone: { model: phone.model, device: phone.device, profile: phone.profile ?? null, label: phone.label ?? null },
+    image: r.image ?? null, imageName: r.imageName ?? null, sessionId: r.sessionId ?? null, outcome: r.outcome ?? null,
+    sessionApp: r.sessionApp
+      ? { version: r.sessionApp.version, versionCode: r.sessionApp.versionCode ?? null, date: r.sessionApp.date ?? null }
+      : null,
+    checklist: r.checklist ?? null, note: r.note ?? null, contact: r.contact ?? null, logs: r.logs ?? null,
+  }
+}
+
+async function report(req, env, ctx) {
+  const user = await uploader(req, env)
+  const length = int(req.headers.get('content-length'), 2, RECORD_MAX)
+  const text = await req.text()
+  if (text.length > length) throw new Refused(400, 'bad length')
+  let parsed
+  try { parsed = JSON.parse(text) } catch { throw new Refused(400, 'not JSON') }
+  // Who sent it comes from the pass, never from the record.
+  const r = { ...check(parsed), tg: user }
+  // Every part must be there before the record is: the app sends them again otherwise.
+  const missing = []
+  for (let i = 0; i < (r.logs?.parts ?? 0); i++) {
+    const v = await env.REPORTS.get(`part:${r.reportId}:${i}`, { type: 'stream' })
+    if (v == null) missing.push(i)
+    else await v.cancel()
+  }
+  if (missing.length) return reply(409, { error: 'missing parts', missing })
+  const receivedAt = new Date().toISOString()
+  await env.REPORTS.put(`report:${receivedAt}:${r.reportId}`, JSON.stringify({ ...r, receivedAt }), { expirationTtl: TTL })
+  if (env.TG_TOKEN && env.TG_CHAT) ctx.waitUntil(ping(env, r).catch(() => {}))
+  return reply(200, { ok: true, reportId: r.reportId })
+}
+
+// The daily usage check-in (0.5.14; owner: real user numbers for the Statistics topic). On by
+// default in the app, off with Settings > Anonymous usage count. A random install id (not tied to
+// the phone or an account), the phone model and OneOS profile, the app version, the systems set up
+// and how many switches since the last check-in. One Analytics Engine data point (dataset
+// oneos_usage), nothing in KV; the sender's address is used for the rate limit only, never stored.
+const INSTALL = /^[0-9a-f]{32}$/
+const IMAGE = /^[a-z0-9][a-z0-9._-]{0,47}$/
+
+async function hello(req, env) {
+  await uploader(req, env)
+  const length = int(req.headers.get('content-length'), 2, 2048)
+  const text = await req.text()
+  if (text.length > length) throw new Refused(400, 'bad length')
+  let h
+  try { h = JSON.parse(text) } catch { throw new Refused(400, 'not JSON') }
+  if (!h || typeof h !== 'object' || h.schema !== 'oneos.hello/1') throw new Refused(400, 'bad schema')
+  if (!INSTALL.test(h.install ?? '')) throw new Refused(400, 'bad install id')
+  const code = int(h.versionCode, 1, 100000)
+  if (!MODEL.test(h.model ?? '')) throw new Refused(400, 'bad model')
+  if (h.profile != null && !TOKEN.test(h.profile)) throw new Refused(400, 'bad profile')
+  const systems = Array.isArray(h.systems) ? h.systems : []
+  if (systems.length > 8 || !systems.every((x) => typeof x === 'string' && IMAGE.test(x))) throw new Refused(400, 'bad systems')
+  const switches = int(h.switches ?? 0, 0, 500)
+  if (env.USAGE) {
+    env.USAGE.writeDataPoint({
+      indexes: [h.install],
+      blobs: [h.model, h.profile ?? '', String(code), systems.join(',')],
+      doubles: [code, switches],
+    })
+  }
+  return reply(200, { ok: true })
+}
+
+// A Telegram username: 5-32 characters, starts with a letter. Anything else the
+// tester may have typed (an e-mail, a phone number, a name) is not put in the
+// group; the record keeps it for the team (reports/pull.py).
+const TG_USER = /^@?([A-Za-z][A-Za-z0-9_]{4,31})$/
+
+function fromLine(contact, user) {
+  if (user?.username) return `From: @${user.username}`
+  if (user) return 'From: a group member without a username (id in the record)'
+  const c = (contact ?? '').trim()
+  if (!c) return 'From: no contact given'
+  const m = TG_USER.exec(c)
+  if (m) return `From: @${m[1]}`
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return 'From: an e-mail address, in the record'
+  if (/^[+0-9][0-9 ()-]{5,}$/.test(c)) return 'From: a phone number, in the record'
+  return 'From: a contact in the record'
+}
+
+function pingText(r) {
+  const lines = [`📋 New report ${r.reportId}`]
+  lines.push(fromLine(r.contact, r.tg))
+  lines.push(`${r.phone.label ?? r.phone.model} (${r.phone.model}) · OneOS ${r.app.version}`)
+  if (r.image) lines.push(`System: ${r.imageName ?? r.image}`)
+  if (r.outcome) lines.push(`Ended: ${r.outcome.kind}${r.outcome.afterSeconds != null ? ` after ${r.outcome.afterSeconds} s` : ''}`)
+  const c = r.checklist
+  if (c?.start) lines.push(`Start: ${START_LABELS[c.start]}`)
+  if (c?.items) {
+    const by = (a) => Object.entries(c.items).filter(([, v]) => v === a).map(([k]) => LABELS[k])
+    const ok = by('works')
+    const bad = by('problem')
+    if (ok.length) lines.push(`✅ ${ok.join(', ')}`)
+    if (bad.length) lines.push(`❌ ${bad.join(', ')}`)
+  }
+  if (r.note) lines.push('Note: sent to the team')
+  if (r.logs) lines.push(`Logs: ${r.logs.kind === 'probe' ? 'probe findings' : r.logs.full ? 'full' : 'short'}, ${(r.logs.bytes / 1048576).toFixed(1)} MB`)
+  else lines.push('Logs: none')
+  return lines.join('\n')
+}
+
+async function ping(env, r) {
+  const body = { chat_id: env.TG_CHAT, text: pingText(r), disable_web_page_preview: true }
+  if (env.TG_THREAD) body.message_thread_id = Number(env.TG_THREAD)
+  await fetch(`https://api.telegram.org/bot${env.TG_TOKEN}/sendMessage`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  })
+}
+
+const KEY = /^(report:[0-9TZ:.-]{20,30}:|part:)[a-z0-9]{1,32}-[0-9a-f]{4,8}(:[0-3])?$/
+
+async function list(req, env, url) {
+  admin(req, env)
+  const prefix = url.searchParams.get('prefix') === 'part:' ? 'part:' : 'report:'
+  const cursor = url.searchParams.get('cursor') || undefined
+  const r = await env.REPORTS.list({ prefix, cursor, limit: 100 })
+  return reply(200, { keys: r.keys.map((k) => ({ name: k.name, metadata: k.metadata ?? null })), cursor: r.list_complete ? null : r.cursor })
+}
+
+async function get(req, env, url) {
+  admin(req, env)
+  const key = url.searchParams.get('key') ?? ''
+  if (!KEY.test(key)) throw new Refused(400, 'bad key name')
+  const v = await env.REPORTS.get(key, { type: 'stream' })
+  if (v == null) return reply(404, { error: 'not found' })
+  return new Response(v, { headers: { 'content-type': key.startsWith('part:') ? 'application/octet-stream' : 'application/json' } })
+}
+
+async function del(req, env, url) {
+  admin(req, env)
+  const key = url.searchParams.get('key') ?? ''
+  if (!KEY.test(key)) throw new Refused(400, 'bad key name')
+  await env.REPORTS.delete(key)
+  return reply(200, { ok: true })
+}
+
+export { pingText, check }

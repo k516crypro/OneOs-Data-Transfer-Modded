@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_start">Başlat</string>
+    <string name="action_stop">Durdur</string>
+    <string name="action_cancel">İptal</string>
+    <string name="action_retry">Tekrar dene</string>
+    <string name="action_settings">Ayarlar</string>
+    <string name="action_install">Yükle</string>
+    <string name="action_remove">Kaldır</string>
+    <string name="action_ok">Tamam</string>
+    <string name="status_loading">Yükleniyor</string>
+    <string name="status_completed">Tamamlandı</string>
+    <string name="status_failed">Başarısız</string>
+    <string name="status_pending">Beklemede</string>
+    <string name="label_storage">Depolama</string>
+    <string name="label_permissions">İzinler</string>
+    <string name="label_system">Sistem</string>
+    <string name="label_transfer">Aktarım</string>
+    <string name="err_permission_denied">Gerekli izin verilmedi. İzinlerinizi kontrol edin.</string>
+    <string name="err_operation_failed">İşlem başarısız oldu. Tekrar deneyin.</string>
+    <string name="err_insufficient_storage">Yeterli depolama alanı bulunmuyor.</string>
+    <string name="err_guest_not_ready">Guest sistemi henüz hazır değil. Önce bir sistem kurun.</string>
+    <string name="err_file_not_found">Dosya bulunamadı.</string>
+    <string name="err_unknown">Bilinmeyen bir hata oluştu.</string>
+    <string name="err_access_denied">Erişim engellendi.</string>
+</resources>

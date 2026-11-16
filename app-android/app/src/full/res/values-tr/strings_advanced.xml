@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="advanced_title">Gelişmiş</string>
+    <string name="advanced_root">Root</string>
+    <string name="advanced_diagnostics">Tanılama</string>
+    <string name="advanced_storage">Depolama</string>
+    <string name="advanced_permissions">İzinler</string>
+    <string name="bring_title">Uygulamaları Aktar</string>
+    <string name="systems_title">Sistemler</string>
+    <string name="guest_runtime_title">Guest Çalışma Ortamı</string>
+    <string name="settings_title">Ayarlar</string>
+    <string name="onboarding_title">Başlangıç</string>
+    <string name="loading">Yükleniyor…</string>
+    <string name="empty_list">Liste boş</string>
+    <string name="confirm_title">Onay</string>
+    <string name="confirm_yes">Evet</string>
+    <string name="confirm_no">Hayır</string>
+</resources>

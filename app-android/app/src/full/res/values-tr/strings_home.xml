@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_subtitle">One UI\'nin yanında başka bir sistem</string>
+    <string name="home_about_title">OneOS Hakkında</string>
+    <string name="home_checking">Telefon kontrol ediliyor…</string>
+    <string name="home_choose">Sistem seç</string>
+    <string name="home_system_ready">%1$s hazır</string>
+    <string name="home_system_row">Android %1$s · uygulamalarınız ve verileriniz korunur</string>
+    <string name="home_advanced">Ayarlar</string>
+    <string name="home_setting_up">%1$s kuruluyor · %2$d%%</string>
+    <string name="home_setting_up_start">%1$s kuruluyor</string>
+    <string name="home_eta">Yaklaşık %1$d dk kaldı</string>
+    <string name="home_eta_wait">Süre hesaplanıyor…</string>
+    <string name="home_setup_keep_open">OneOS\'u açık tutun ve telefonu şarjda bırakın.</string>
+    <string name="home_switching">%1$s hazırlanıyor…</string>
+    <string name="home_closing">One UI kapanıyor…</string>
+    <string name="home_restoring">One UI ayarları geri yükleniyor…</string>
+    <string name="home_welcome">Tekrar hoş geldiniz</string>
+    <string name="home_send_report">Raporu OneOS ekibine gönder</string>
+    <string name="home_send_report_summary">Kişisel bilgiler önce kaldırılır: numaralar, Wi-Fi adları, hesaplar.</string>
+    <string name="home_dismiss">Kapat</string>
+    <string name="home_details">Ayrıntılar</string>
+    <string name="home_details_all">Tüm kontroller</string>
+    <string name="before_link_summary">Neler bozulabilir, yedekler ve ekran kilidi</string>
+    <string name="before_experimental_title">OneOS deneyseldir</string>
+    <string name="before_backup_title">Önce yedek alın</string>
+    <string name="before_backup_summary">Önce hesaplarınızı ve verilerinizi yedekleyin: Samsung Cloud, Google, Smart Switch.</string>
+    <string name="before_lock_title">Ekran kilidini kaldırın</string>
+    <string name="before_apps_title">Diğer sistemde çalıştırdığınız uygulamalar</string>
+    <string name="before_tested_title">Tek bir telefonda test edildi</string>
+    <string name="before_ack">Yedek aldım ve ekran kilidini kaldırdım</string>
+</resources>

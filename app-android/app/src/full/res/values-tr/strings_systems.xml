@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="systems_choose">Sistem seç</string>
+    <string name="systems_ready">Hazır</string>
+    <string name="systems_setup">Kurulum</string>
+    <string name="systems_remove">Kaldır</string>
+    <string name="systems_launch">Başlat</string>
+    <string name="bring_select">Uygulama seç</string>
+    <string name="bring_collecting">Toplanıyor</string>
+    <string name="bring_done">Aktarım tamamlandı</string>
+    <string name="bring_failed">Aktarım başarısız</string>
+    <string name="guest_start">Guest başlat</string>
+    <string name="guest_stop">Guest durdur</string>
+    <string name="guest_not_ready">Guest hazır değil</string>
+    <string name="permission_needed">İzin gerekli</string>
+    <string name="permission_grant">İzin ver</string>
+</resources>

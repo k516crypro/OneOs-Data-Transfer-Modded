@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="transfer_title">OneOS Veri Aktarımı</string>
+    <string name="transfer_source">Kaynak: One UI</string>
+    <string name="transfer_dest">Hedef: OxygenOS 16 Guest</string>
+    <string name="transfer_photos">Fotoğraflar</string>
+    <string name="transfer_videos">Videolar</string>
+    <string name="transfer_documents">Belgeler</string>
+    <string name="transfer_downloads">İndirilenler</string>
+    <string name="transfer_pick">Seç</string>
+    <string name="transfer_start">Aktarımı Başlat</string>
+    <string name="transfer_cancel">İptal</string>
+    <string name="transfer_ready">Hazır</string>
+    <string name="transfer_starting">Aktarım başlatılıyor</string>
+    <string name="transfer_finished">Aktarım tamamlandı</string>
+    <string name="transfer_finished_errors">Aktarım %1$d hata ile tamamlandı</string>
+    <string name="transfer_cancelled">Aktarım iptal edildi</string>
+    <string name="transfer_no_stage">Guest sistemi henüz hazır değil. Önce bir sistem kurun.</string>
+    <string name="transfer_no_files">Aktarılacak dosya seçilmedi.</string>
+    <string name="transfer_unsafe_name">Güvenli olmayan dosya adı reddedildi.</string>
+    <string name="transfer_size_mismatch">Dosya boyutu uyuşmuyor.</string>
+    <string name="transfer_sha_fail">SHA-256 doğrulaması başarısız. Dosya aktarılmadı.</string>
+    <string name="transfer_root_refused">Root işlemi reddedildi. İzinleri kontrol edin.</string>
+    <string name="transfer_open_failed">Dosya açılamadı. İzinlerinizi kontrol edin.</string>
+    <string name="transfer_index_pending">Galeri indeksleme: Beklemede (Guest medya tarayıcısı açılışta çalışır)</string>
+    <string name="transfer_index_success">Galeri indeksleme: Başarılı</string>
+    <string name="transfer_index_failed">Galeri indeksleme: Başarısız (dosya Guest\'e ulaştı, Galeri\'de görünmeyebilir)</string>
+    <string name="transfer_summary">Aktarılan: %1$d  Başarısız: %2$d</string>
+    <string name="err_unexpected">Beklenmeyen bir hata oluştu. Tekrar deneyin.</string>
+    <string name="err_permission">Gerekli izin verilmedi. İzinlerinizi kontrol edin.</string>
+    <string name="err_storage">Yeterli depolama alanı bulunmuyor.</string>
+    <string name="err_not_found">Dosya bulunamadı.</string>
+    <string name="err_access">Erişim engellendi.</string>
+    <string name="err_invalid">Geçersiz dosya.</string>
+    <string name="err_try_again">Tekrar dene</string>
+</resources>
