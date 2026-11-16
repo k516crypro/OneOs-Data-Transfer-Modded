@@ -4,6 +4,7 @@ import android.content.Intent
 import android.view.Menu
 import android.view.MenuItem
 import com.fahadali.oneos.R
+import com.fahadali.oneos.transfer.DataTransferActivity
 import dev.oneuiproject.oneui.R as OuiIcons
 import dev.oneuiproject.oneui.ktx.startPopOverActivity
 import dev.oneuiproject.oneui.popover.PopOverOptions
@@ -26,9 +27,16 @@ class LauncherActivity : SystemsActivity() {
             setIcon(OuiIcons.drawable.ic_oui_settings_outline)
             setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         }
+        menu.add(0, 901, 1, R.string.transfer_title).apply {
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        }
         return true
     }
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == 901) {
+            startActivity(Intent(this, DataTransferActivity::class.java))
+            return true
+        }
         if (item.itemId == 900) {
             val target = Intent(this, AdvancedActivity::class.java)
             if (resources.configuration.smallestScreenWidthDp >= 600) {

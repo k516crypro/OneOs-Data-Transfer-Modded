@@ -18,7 +18,7 @@ Mevcut OxygenOS 16 kurulumu korunur: `system.raw` silinmez, `remove` / `purge` /
 
 ## Nasıl çalışır
 
-1. One UI’de OneOS → **Veri Aktarımı** ekranını aç.
+1. OxygenOS Guest’ten One UI ana sisteme dön. One UI’de OneOS uygulamasını açıp sistem kataloğundaki sağ üst **⋮** menüsünden **OneOS Veri Aktarımı** seç. Bu ekran Guest içinden açılmaz; menü girişi 0.5.18 ve sonrasında bulunur.
 2. Kategori seç, dosya/kişi/uygulama seç.
 3. Yinelenen dosya: **Atla** (varsayılan) veya **Yeniden adlandır**.
 4. **Aktarımı Başlat**.
