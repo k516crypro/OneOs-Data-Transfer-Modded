@@ -63,7 +63,7 @@ object TransferJob {
 
     suspend fun start(ctx: Context, selection: TransferSelection) = withContext(Dispatchers.IO) {
         val stage = StageCheck.state.result
-        if (stage == null || !stage.ours) {
+        if (stage == null || !stage.status.ours) {
             _state.value = TransferProgress(message = "Guest sistemi henüz hazır değil.", error = "Stage hazır değil")
             return@withContext
         }

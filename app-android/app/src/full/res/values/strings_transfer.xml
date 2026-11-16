@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="transfer_title">OneOS Data Transfer</string>
+    <string name="transfer_source">Source: One UI</string>
+    <string name="transfer_dest">Destination: OxygenOS 16 Guest</string>
+    <string name="transfer_photos">Photos</string>
+    <string name="transfer_videos">Videos</string>
+    <string name="transfer_documents">Documents</string>
+    <string name="transfer_downloads">Downloads</string>
+    <string name="transfer_pick">Select</string>
+    <string name="transfer_start">Start transfer</string>
+    <string name="transfer_cancel">Cancel</string>
+    <string name="transfer_ready">Ready</string>
+    <string name="transfer_starting">Starting transfer</string>
+    <string name="transfer_finished">Transfer complete</string>
+    <string name="transfer_finished_errors">Transfer finished with %1$d errors</string>
+    <string name="transfer_cancelled">Transfer canceled</string>
+    <string name="transfer_no_stage">Guest system is not ready. Set up a system first.</string>
+    <string name="transfer_no_files">No files selected for transfer.</string>
+    <string name="transfer_unsafe_name">Rejected an unsafe file name.</string>
+    <string name="transfer_size_mismatch">File size does not match.</string>
+    <string name="transfer_sha_fail">SHA-256 verification failed. The file was not transferred.</string>
+    <string name="transfer_root_refused">Root operation was refused. Check permissions.</string>
+    <string name="transfer_open_failed">Could not open the file. Check permissions.</string>
+    <string name="transfer_index_pending">Gallery indexing: Pending (the Guest media scanner runs at boot)</string>
+    <string name="transfer_index_success">Gallery indexing: Complete</string>
+    <string name="transfer_index_failed">Gallery indexing failed (the file reached Guest but may not appear in Gallery)</string>
+    <string name="transfer_summary">Transferred: %1$d  Failed: %2$d</string>
+    <string name="err_unexpected">An unexpected error occurred. Please try again.</string>
+    <string name="err_permission">A required permission was not granted. Check permissions.</string>
+    <string name="err_storage">There is not enough storage space.</string>
+    <string name="err_not_found">File not found.</string>
+    <string name="err_access">Access denied.</string>
+    <string name="err_invalid">Invalid file.</string>
+    <string name="err_try_again">Try again</string>
+</resources>
