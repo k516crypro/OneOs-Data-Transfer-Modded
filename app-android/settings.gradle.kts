@@ -24,16 +24,25 @@ pluginManagement {
     }
 }
 
-// SESL (io.github.oneuiproject.sesl:*) and the One UI design library are on
-// Maven Central: no GitHub Packages token needed (docs/app/DESIGN.md, top).
+// OneUI Design and SESL artifacts are hosted in tribalfs GitHub Packages.
+// The classic PAT above needs read:packages access to these repositories.
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
         maven("https://jitpack.io")
-        maven("https://maven.pkg.github.com/tribalfs/*") {
+        maven("https://maven.pkg.github.com/tribalfs/oneui-design") {
             credentials { username = ghPackagesUser; password = ghPackagesToken }
+            content { includeGroup("io.github.tribalfs") }
+        }
+        maven("https://maven.pkg.github.com/tribalfs/sesl-androidx") {
+            credentials { username = ghPackagesUser; password = ghPackagesToken }
+            content { includeGroupByRegex("sesl\\.androidx\\..*") }
+        }
+        maven("https://maven.pkg.github.com/tribalfs/sesl-material-components-android") {
+            credentials { username = ghPackagesUser; password = ghPackagesToken }
+            content { includeGroup("sesl.com.google.android.material") }
         }
     }
 }
