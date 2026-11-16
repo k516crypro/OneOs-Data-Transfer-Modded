@@ -1,20 +1,27 @@
-# OneOS — Data Transfer (Modded)
+# OneOS — OxygenOS 16 Guest için Android yardımcı uygulaması (modlu)
 
-> Experimental / not device-validated. A successful CI build does not prove runtime safety or device compatibility.
+OneOS, desteklenen Android telefonlarda One UI ana sisteminden ayrı bir Android konuk sistemini hazırlamak ve başlatmak için kullanılan Android uygulamasıdır. Sistem imajı telefona klasik bir ROM gibi flaşlanmaz; uygulama root üzerinden OneOS stage alanını yönetir, uygunluk kontrolleri yapar ve konuk sistemle ana sistem arasında geçiş akışını başlatır. Bu depo uygulamanın kendisini içerir; OxygenOS imajı değildir.
 
-## Data Transfer
+Bu depo, [OneOS projesi](https://github.com/fahadalijaved/OneOS) üzerine kullanıcı talebiyle hazırlanmış modlu bir derlemedir. Android uygulama kimliği `com.fahadali.oneos`; kaynakta tanımlı sürüm `0.5.17` (versionCode `146`). Bu modlu derlemede aşağıdaki eklemeler ve düzeltmeler bulunur.
 
-- Host → Guest only; Host source is read-only.
-- Destination: Guest Pictures/Movies/Documents/Download under OneOS Transfer.
-- Streaming uses 64 KiB chunks, not whole-file memory loading.
-- SHA-256 verification before success; `.part` temporary file then atomic rename.
-- Duplicate policy: Skip by default, Rename option; Replace disabled.
-- Guest storage check when available with 100 MiB margin.
-- Gallery/media indexing is not guaranteed yet.
+## Bu modlu sürümde neler değişti?
 
-## Build
+- **One UI → OxygenOS 16 Guest aktarımı:** Fotoğraf, video, belge ve indirilen dosyalar aktarılabilir. Kişiler vCard olarak hazırlanır. Uygulama seçimi mevcut Bring Apps aktarım akışını kullanır.
+- **Güvenli dosya aktarımı:** One UI kaynakları salt okunur kullanılır; hedef yalnızca OneOS Guest stage altındaki medya alanıdır. Dosya adı/yol güvenlik kontrolleri ve SHA-256 doğrulaması vardır. Boş alan uygunsa kontrol edilir. Yinelenen dosyalar varsayılan olarak atlanır veya yeniden adlandırılır; güvenli üzerine yazma uygulanmadığından Replace seçeneği devre dışıdır.
+- **UI Activator başlatma düzeltmesi:** Uzun activator betiği artık tek bir `sh -c` argümanı olarak verilmek yerine runtime betik dosyasına yazılıp dosyadan çalıştırılır. Bu değişiklik, loglarda görülen `Argument list too long` hatasına neden olan uzun argüman yolunu kaldırır. Gerçek cihazda doğrulama henüz yapılmadı.
+- **GitHub Actions derlemesi:** Guest helper APK ve full debug APK otomatik derlenir; build çıktısı Actions artifact’i olarak sunulur. GitHub Packages erişim bilgileri yalnızca Actions secrets üzerinden kullanılır.
 
-Requires JDK 21 and Android SDK API 37. From the repository root, build and stage the Guest helper first, then assemble the main APK:
+Aktarımın ayrıntıları için [`DATA_TRANSFER.md`](DATA_TRANSFER.md) dosyasına bakın.
+
+## APK’yı edinme ve kurma
+
+[OneOS Modded 0.5.17 debug pre-release](https://github.com/k516crypro/OneOs-Data-Transfer-Modded/releases/tag/oneos-modded-0.5.17-debug) sayfasından `OneOS-Modded-0.5.17-debug.apk` dosyasını indirin. Android’de indirdiğiniz APK’yı açın ve istenirse kullandığınız dosya yöneticisi/tarayıcı için “Bu kaynaktan yüklemeye izin ver” seçeneğini etkinleştirin.
+
+**İmza uyarısı:** Yayınlanan dosya CI tarafından üretilmiş bir **debug APK**’dır. Mevcut OneOS release APK’sının imza anahtarıyla aynı olmayabilir ve onun üzerine güncelleme olarak kurulamayabilir. Sırf denemek için mevcut uygulamayı kaldırmayın; kaldırma uygulama verilerini silebilir ve root iznini yeniden vermenizi gerektirebilir. Önce yedek alın.
+
+## Derleme
+
+Gerekenler: JDK 21 ve Android SDK API 37. Depo kök dizininden:
 
 ```bash
 ./scripts/build-guest-manager.sh debug
@@ -22,14 +29,16 @@ cd app-android
 ./gradlew :app:assembleFullDebug --stacktrace
 ```
 
-APK output: `app-android/app/build/outputs/apk/full/debug/`
+Full debug APK çıktısı: `app-android/app/build/outputs/apk/full/debug/app-full-debug.apk`.
 
 ## GitHub Actions
 
-Push to `main` or run **Actions → Build OneOS APK → Run workflow**. Download `oneos-full-debug` from the completed run's Artifacts (14-day retention). The workflow needs repository Actions secrets `GH_PACKAGES_USER` and `GH_PACKAGES_TOKEN` to resolve Samsung SESL packages from GitHub Packages; the token must have `read:packages` access. Keep credentials in Actions secrets, never in source.
+`main` dalına push edildiğinde **Build OneOS APK** workflow’u çalışır. Tamamlanan run’ın Artifacts bölümünde `oneos-full-debug` bulunur. Bu artifact 14 gün saklanır. Samsung SESL paketlerini GitHub Packages’dan indirebilmek için depoda `GH_PACKAGES_USER` ve `GH_PACKAGES_TOKEN` Actions secret’ları tanımlı olmalıdır; token’da `read:packages` erişimi gerekir. Token’ları kaynak koduna eklemeyin.
 
-CI verifies compilation only; real-device testing is still required for transfers, cancellation, low storage, Guest visibility, and root behavior.
+[Bu modlu APK’yı üreten başarılı Actions run’ı](https://github.com/k516crypro/OneOs-Data-Transfer-Modded/actions/runs/43904712220) derlemeyi ve artifact yüklemeyi doğrular. Bu, cihaz üzerinde çalışma testi yapıldığı anlamına gelmez.
 
-## License and safety
+## Test durumu ve güvenlik
 
-See `LICENSE`, `NOTICE`, and `CREDITS.md` for license and attribution terms. In particular, OneLineage-derived components are included with separate written permission for this OneOS distribution; that permission does not grant general reuse rights elsewhere. This software is experimental: back up important data and test on a non-critical device.
+Derleme CI’da başarılıdır; OxygenOS 16 Guest açılışı, otomatik dönüş, aktarım, iptal, düşük depolama ve Galeri’de görünürlük gerçek cihazda ayrıca test edilmelidir. UI Activator değişikliği için henüz `Home activated!` logu ve normal OxygenOS oturumu ile doğrulama yoktur. Bu nedenle sorun kesin olarak çözüldü denemez.
+
+OneOS root erişimi ve açıkça desteklenen cihaz/imaj profilleri gerektirir. Önemli verileri yedekleyin ve kritik olmayan bir cihazda test edin. Lisans ve atıflar için [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) ve [`CREDITS.md`](CREDITS.md) dosyalarına bakın. OneLineage kaynaklı bileşenlerin bu OneOS dağıtımında kullanımı için ayrı yazılı izin alınmıştır; bu izin başka projelerde genel yeniden kullanım hakkı vermez.
